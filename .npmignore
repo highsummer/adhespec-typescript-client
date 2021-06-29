@@ -3,3 +3,4 @@
 .gitignore
 tsconfig.json
 .npmrc
+/api.ts
