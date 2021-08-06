@@ -16,6 +16,33 @@ import * as fs from "fs";
 import * as ts from "typescript";
 import yargs from "yargs";
 
+function gatherReferences(model: Model): string[] {
+  if (model.type === BooleanModelTypeSignature) {
+    return []
+  } else if (model.type === NumberModelTypeSignature) {
+    return []
+  } else if (model.type === StringModelTypeSignature) {
+    return []
+  } else if (model.type === ArrayModelTypeSignature) {
+    return gatherReferences(model.elements)
+  } else if (model.type === TupleModelTypeSignature) {
+    return [...new Set(model.elements.flatMap(gatherReferences))]
+  } else if (model.type === DictionaryModelTypeSignature) {
+    return [...new Set(model.fields.flatMap(([_, value]) => gatherReferences(value)))]
+  } else if (model.type === MapModelTypeSignature) {
+    return [...new Set([...gatherReferences(model.keyType), ...gatherReferences(model.valueType)])]
+  } else if (model.type === UnionModelTypeSignature) {
+    return [...new Set(model.elements.flatMap(gatherReferences))]
+  } else if (model.type === ModelReferenceTypeSignature) {
+    return [model.id]
+  } else if (model.type === SpecialModelTypeSignature) {
+    throw new Error("not supported")
+  } else {
+    const _: never = model;
+    return _
+  }
+}
+
 function toTypeNode(model: Model): ts.TypeNode {
   if (model.type === BooleanModelTypeSignature) {
     return ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword)
@@ -26,11 +53,11 @@ function toTypeNode(model: Model): ts.TypeNode {
       return ts.factory.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword)
     }
   } else if (model.type === StringModelTypeSignature) {
-    if (model.format === "datetime-ISO8601") {
+    /* if (model.format === "datetime-ISO8601") {
       return ts.factory.createTypeReferenceNode("Date")
     } else if (model.format === "date-ISO8601") {
       return ts.factory.createTypeReferenceNode("Date")
-    } else if (model.constraints?.enum !== undefined) {
+    } else */ if (model.constraints?.enum !== undefined) {
       return ts.factory.createUnionTypeNode(model.constraints.enum.map(e => ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(e))))
     } else {
       return ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword)
@@ -40,7 +67,7 @@ function toTypeNode(model: Model): ts.TypeNode {
   } else if (model.type === TupleModelTypeSignature) {
     return ts.factory.createTupleTypeNode(model.elements.map(toTypeNode))
   } else if (model.type === DictionaryModelTypeSignature) {
-    return ts.factory.createTypeLiteralNode(model.fields.map(([key, value]) => ts.factory.createPropertySignature(undefined, key, undefined, toTypeNode(value))))
+    return ts.factory.createTypeLiteralNode(model.fields.map(([key, value]) => ts.factory.createPropertySignature(undefined, key, value.optional ? ts.factory.createToken(ts.SyntaxKind.QuestionToken) : undefined, toTypeNode(value))))
   } else if (model.type === MapModelTypeSignature) {
     return ts.factory.createMappedTypeNode(
       undefined, ts.factory.createTypeParameterDeclaration("p"),
@@ -72,22 +99,34 @@ function fromContract(contract: HttpRestContract): ts.Expression {
         ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
     ],
     [
-      ts.factory.createCallExpression(
-        ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("JSON"), "parse"),
-        undefined,
-        [ts.factory.createStringLiteral(JSON.stringify(contract))],
-      ),
+      ts.factory.createStringLiteral(contract.url),
+      ts.factory.createStringLiteral(contract.method),
       ts.factory.createIdentifier("options"),
     ]
   )
 }
 
 function fromContracts(contracts: HttpRestContract[]): ts.Expression {
+  const references = [...new Set(contracts.flatMap(contract => [
+    ...gatherReferences(contract.requestBody),
+    ...contract.responses.flatMap(response => gatherReferences(response.body))
+  ]))];
+
   return ts.factory.createArrowFunction(
-    undefined, undefined,
+    undefined,
+    [
+      ts.factory.createTypeParameterDeclaration(
+        "ModelReferences", ts.factory.createTypeLiteralNode(
+          references.map(reference => ts.factory.createPropertySignature(
+            undefined, ts.factory.createStringLiteral(reference), undefined,
+            ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+          ))
+        ),
+      ),
+    ],
     [ts.factory.createParameterDeclaration(
       undefined, undefined, undefined, "options", undefined,
-      ts.factory.createTypeReferenceNode("RequestInit"),
+      ts.factory.createTypeReferenceNode("RequestType"),
     )],
     undefined,
     ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
@@ -101,7 +140,6 @@ function fromContracts(contracts: HttpRestContract[]): ts.Expression {
 }
 
 async function main() {
-
   const argv = await yargs(process.argv)
     .string("input")
     .demandOption("input")
@@ -109,6 +147,9 @@ async function main() {
     .string("output")
     .default({ output: "api.ts" })
     .alias("o", "output")
+    .string("type")
+    .demandOption("type")
+    .alias("t", "type")
     .argv;
 
   const contractFiles = await new Promise<string[]>((resolve, reject) => glob(argv.input, (err, filePaths) => {
@@ -119,12 +160,19 @@ async function main() {
     }
   }));
 
-  const exportStatement = ts.factory.createExportDefault(
-    fromContracts(contractFiles.map(path => JSON.parse(fs.readFileSync(path).toString("utf-8"))))
+  const apiDeclaration = ts.factory.createVariableStatement(
+    undefined, [
+      ts.factory.createVariableDeclaration(
+        "api", undefined, undefined,
+        fromContracts(contractFiles.map(path => JSON.parse(fs.readFileSync(path).toString("utf-8"))))
+      )
+    ],
   );
 
+  const exportStatement = ts.factory.createExportDefault(ts.factory.createIdentifier("api"));
+
   const source = ts.factory.createSourceFile(
-    [exportStatement],
+    [apiDeclaration, exportStatement],
     ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
     ts.NodeFlags.Const,
   );
@@ -135,7 +183,10 @@ async function main() {
     omitTrailingSemicolon: false,
   });
 
-  fs.writeFileSync(argv.output, `// generated at ${new Date().toISOString()}\n\n` + fs.readFileSync("./src/utils.ts") + "\n\n" + printer.printFile(source));
+  const target = argv.type === "browser" ? "./src/browser.ts" :
+    argv.type === "node" ? "./src/node.ts" : "";
+
+  fs.writeFileSync(argv.output, `// generated at ${new Date().toISOString()}\n\n` + fs.readFileSync(target) + "\n\n" + printer.printFile(source));
 }
 
 main().then();
