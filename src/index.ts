@@ -99,7 +99,11 @@ function fromContract(contract: HttpRestContract): ts.Expression {
         ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
     ],
     [
-      ts.factory.createStringLiteral(contract.url),
+      ts.factory.createCallExpression(
+        ts.factory.createIdentifier("OverrideUrl"),
+        undefined,
+        [ts.factory.createStringLiteral(contract.url)],
+      ),
       ts.factory.createStringLiteral(contract.method),
       ts.factory.createIdentifier("options"),
     ]

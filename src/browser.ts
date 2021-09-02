@@ -1,5 +1,7 @@
 import {Either, left, right} from "fp-chainer/lib/either";
 
+const OverrideUrl = (_: string) => _;
+
 type RequestType = RequestInit & { variables?: { [p: string]: string | undefined } };
 
 export type RequestBodyOf<Caller> = Caller extends (requestBody: infer RequestBody, runtimeOptions?: RequestType) => Promise<Either<infer ExceptionBody, infer ResponseBody>> ?
