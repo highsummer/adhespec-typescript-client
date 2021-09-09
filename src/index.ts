@@ -88,16 +88,20 @@ function toTypeNode(model: Model): ts.TypeNode {
   }
 }
 
-function fromContract(contract: HttpRestContract): ts.Expression {
+function fromContractToTypes(contract: HttpRestContract): { request: ts.TypeNode, success: ts.TypeNode, exceptions: ts.TypeNode } {
+  return {
+    request: toTypeNode(contract.requestBody),
+    success: toTypeNode(contract.responses.find(response => response.code === 200)?.body!),
+    exceptions: contract.responses.filter(response => response.code !== 200).length > 0 ?
+      ts.factory.createUnionTypeNode(contract.responses.filter(response => response.code !== 200).map(response => toTypeNode(response.body))) :
+      ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
+  }
+}
+
+function fromContract(types: { request: ts.TypeNode, success: ts.TypeNode, exceptions: ts.TypeNode }, contract: HttpRestContract): ts.Expression {
   return ts.factory.createCallExpression(
     ts.factory.createIdentifier("call"),
-    [
-      toTypeNode(contract.requestBody),
-      toTypeNode(contract.responses.find(response => response.code === 200)?.body!),
-      contract.responses.filter(response => response.code !== 200).length > 0 ?
-        ts.factory.createUnionTypeNode(contract.responses.filter(response => response.code !== 200).map(response => toTypeNode(response.body))) :
-        ts.factory.createKeywordTypeNode(ts.SyntaxKind.NeverKeyword),
-    ],
+    [types.request, types.success, types.exceptions],
     [
       ts.factory.createCallExpression(
         ts.factory.createIdentifier("OverrideUrl"),
@@ -110,37 +114,80 @@ function fromContract(contract: HttpRestContract): ts.Expression {
   )
 }
 
-function fromContracts(contracts: HttpRestContract[]): ts.Expression {
+function fromContracts(alias: string, contracts: HttpRestContract[]): ts.Statement[] {
   const references = [...new Set(contracts.flatMap(contract => [
     ...gatherReferences(contract.requestBody),
     ...contract.responses.flatMap(response => gatherReferences(response.body))
   ]))];
 
-  return ts.factory.createArrowFunction(
-    undefined,
-    [
-      ts.factory.createTypeParameterDeclaration(
-        "ModelReferences", ts.factory.createTypeLiteralNode(
-          references.map(reference => ts.factory.createPropertySignature(
-            undefined, ts.factory.createStringLiteral(reference), undefined,
-            ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
-          ))
-        ),
-      ),
-    ],
-    [ts.factory.createParameterDeclaration(
-      undefined, undefined, undefined, "options", undefined,
-      ts.factory.createTypeReferenceNode("RequestType"),
-    )],
-    undefined,
-    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-    ts.factory.createObjectLiteralExpression(
-      contracts.map(contract => {
-        console.log(`processing '${contract.id}'`);
-        return ts.factory.createPropertyAssignment(ts.factory.createStringLiteral(contract.id), fromContract(contract))
-      })
+  const types = ts.factory.createTypeLiteralNode(
+    contracts.map(contract => {
+      const { request, success, exceptions } = fromContractToTypes(contract);
+      return ts.factory.createPropertySignature(
+        undefined, ts.factory.createStringLiteral(contract.id), undefined,
+        ts.factory.createTypeLiteralNode([
+          ts.factory.createPropertySignature(undefined, "request", undefined, request),
+          ts.factory.createPropertySignature(undefined, "success", undefined, success),
+          ts.factory.createPropertySignature(undefined, "exceptions", undefined, exceptions),
+        ])
+      )
+    })
+  );
+
+  return [
+    ts.factory.createTypeAliasDeclaration(undefined, [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], `${alias}Types`, undefined, types),
+    ts.factory.createVariableStatement(
+      [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], ts.factory.createVariableDeclarationList(
+        [ts.factory.createVariableDeclaration(
+          `${alias}Api`, undefined, undefined,
+          ts.factory.createArrowFunction(
+            undefined,
+            [
+              ts.factory.createTypeParameterDeclaration(
+                "ModelReferences", ts.factory.createTypeLiteralNode(
+                  references.map(reference => ts.factory.createPropertySignature(
+                    undefined, ts.factory.createStringLiteral(reference), undefined,
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+                  ))
+                ),
+              ),
+            ],
+            [ts.factory.createParameterDeclaration(
+              undefined, undefined, undefined, "options", undefined,
+              ts.factory.createTypeReferenceNode("RequestType"),
+            )],
+            undefined,
+            ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+            ts.factory.createObjectLiteralExpression(
+              contracts.map(contract => {
+                const baseType = ts.factory.createIndexedAccessTypeNode(
+                  ts.factory.createTypeReferenceNode(`${alias}Types`),
+                  ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(contract.id))
+                );
+                return ts.factory.createPropertyAssignment(
+                  ts.factory.createStringLiteral(contract.id),
+                  fromContract({
+                    request: ts.factory.createIndexedAccessTypeNode(
+                      baseType,
+                      ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("request")),
+                    ),
+                    success: ts.factory.createIndexedAccessTypeNode(
+                      baseType,
+                      ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("success")),
+                    ),
+                    exceptions: ts.factory.createIndexedAccessTypeNode(
+                      baseType,
+                      ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral("exceptions")),
+                    )
+                  }, contract),
+                )
+              })
+            )
+          ),
+        )]
+      )
     )
-  )
+  ]
 }
 
 async function main() {
@@ -148,6 +195,9 @@ async function main() {
     .string("input")
     .demandOption("input")
     .alias("i", "input")
+    .string("alias")
+    .demandOption("alias")
+    .alias("a", "alias")
     .string("output")
     .default({ output: "api.ts" })
     .alias("o", "output")
@@ -164,19 +214,12 @@ async function main() {
     }
   }));
 
-  const apiDeclaration = ts.factory.createVariableStatement(
-    undefined, [
-      ts.factory.createVariableDeclaration(
-        "api", undefined, undefined,
-        fromContracts(contractFiles.map(path => JSON.parse(fs.readFileSync(path).toString("utf-8"))))
-      )
-    ],
-  );
+  const apiDeclarations = fromContracts(argv.alias, contractFiles.map(path => JSON.parse(fs.readFileSync(path).toString("utf-8"))));
 
-  const exportStatement = ts.factory.createExportDefault(ts.factory.createIdentifier("api"));
+  const exportStatement = ts.factory.createExportDefault(ts.factory.createIdentifier(`${argv.alias}Api`));
 
   const source = ts.factory.createSourceFile(
-    [apiDeclaration, exportStatement],
+    [...apiDeclarations, exportStatement],
     ts.factory.createToken(ts.SyntaxKind.EndOfFileToken),
     ts.NodeFlags.Const,
   );
