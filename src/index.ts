@@ -11,7 +11,7 @@ import {
   TupleModelTypeSignature,
   UnionModelTypeSignature
 } from "adhespec-typescript-interface";
-import glob from "glob";
+import * as glob from "glob";
 import * as fs from "fs";
 import * as ts from "typescript";
 import yargs from "yargs";
@@ -26,13 +26,13 @@ function gatherReferences(model: Model): string[] {
   } else if (model.type === ArrayModelTypeSignature) {
     return gatherReferences(model.elements)
   } else if (model.type === TupleModelTypeSignature) {
-    return [...new Set(model.elements.flatMap(gatherReferences))]
+    return Array.from(new Set(model.elements.flatMap(gatherReferences)))
   } else if (model.type === DictionaryModelTypeSignature) {
-    return [...new Set(model.fields.flatMap(([_, value]) => gatherReferences(value)))]
+    return Array.from(new Set(model.fields.flatMap(([_, value]) => gatherReferences(value))))
   } else if (model.type === MapModelTypeSignature) {
-    return [...new Set([...gatherReferences(model.keyType), ...gatherReferences(model.valueType)])]
+    return Array.from(new Set([...gatherReferences(model.keyType), ...gatherReferences(model.valueType)]))
   } else if (model.type === UnionModelTypeSignature) {
-    return [...new Set(model.elements.flatMap(gatherReferences))]
+    return Array.from(new Set(model.elements.flatMap(gatherReferences)))
   } else if (model.type === ModelReferenceTypeSignature) {
     return [model.id]
   } else if (model.type === SpecialModelTypeSignature) {
@@ -115,10 +115,10 @@ function fromContract(types: { request: ts.TypeNode, success: ts.TypeNode, excep
 }
 
 function fromContracts(alias: string, contracts: HttpRestContract[]): ts.Statement[] {
-  const references = [...new Set(contracts.flatMap(contract => [
+  const references = Array.from(new Set(contracts.flatMap(contract => [
     ...gatherReferences(contract.requestBody),
     ...contract.responses.flatMap(response => gatherReferences(response.body))
-  ]))];
+  ])));
 
   const types = ts.factory.createTypeLiteralNode(
     contracts.map(contract => {

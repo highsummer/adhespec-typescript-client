@@ -2,11 +2,14 @@
   "name": "adhespec-typescript-client",
   "version": "0.1.0",
   "description": "",
-  "main": "lib",
-  "types": "lib",
+  "main": "./lib/index.js",
+  "types": "./lib",
   "scripts": {
     "gen": "ts-node src/index.ts",
     "build": "tsc"
+  },
+  "bin": {
+    "gen": "./bin/index.js"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +26,6 @@
   "devDependencies": {
     "@types/node": "^15.12.4",
     "ts-node": "^10.0.0"
-  }
+  },
+  "preferGlobal": true
 }

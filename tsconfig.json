@@ -1,34 +1,24 @@
 {
-  "compileOnSave": false,
   "compilerOptions": {
-    "target": "esnext",
+    "lib": [
+      "es5",
+      "es6",
+      "es7",
+      "es2019",
+    ],
+    "target": "es5",
     "module": "commonjs",
     "moduleResolution": "node",
-    "jsx": "preserve",
-    "allowJs": true,
-    "allowSyntheticDefaultImports": true,
-    "lib": [
-      "es6",
-      "dom",
-      "es2019"
-    ],
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+    "outDir": "./lib",
     "sourceMap": true,
+    "declaration": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "typeRoots": ["./node_modules/@types"],
     "strictNullChecks": true,
-    "noImplicitAny": true,
-    "strict": true
+    "noImplicitAny": true
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules"
+    "./src/index.ts"
   ]
 }
