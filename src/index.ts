@@ -135,7 +135,22 @@ function fromContracts(alias: string, contracts: HttpRestContract[]): ts.Stateme
   );
 
   return [
-    ts.factory.createTypeAliasDeclaration(undefined, [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], `${alias}Types`, undefined, types),
+    ts.factory.createTypeAliasDeclaration(
+      undefined,
+      [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+      `${alias}Types`,
+      [
+        ts.factory.createTypeParameterDeclaration(
+          "ModelReferences", ts.factory.createTypeLiteralNode(
+            references.map(reference => ts.factory.createPropertySignature(
+              undefined, ts.factory.createStringLiteral(reference), undefined,
+              ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword),
+            ))
+          ),
+        ),
+      ],
+      types
+    ),
     ts.factory.createVariableStatement(
       [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], ts.factory.createVariableDeclarationList(
         [ts.factory.createVariableDeclaration(
@@ -161,7 +176,7 @@ function fromContracts(alias: string, contracts: HttpRestContract[]): ts.Stateme
             ts.factory.createObjectLiteralExpression(
               contracts.map(contract => {
                 const baseType = ts.factory.createIndexedAccessTypeNode(
-                  ts.factory.createTypeReferenceNode(`${alias}Types`),
+                  ts.factory.createTypeReferenceNode(`${alias}Types`, [ts.factory.createTypeReferenceNode("ModelReferences")]),
                   ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(contract.id))
                 );
                 return ts.factory.createPropertyAssignment(
