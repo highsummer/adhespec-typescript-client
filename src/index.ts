@@ -246,8 +246,8 @@ async function main() {
     omitTrailingSemicolon: false,
   });
 
-  const target = argv.type === "browser" ? path.join(__dirname, "src/browser.ts") :
-    argv.type === "node" ? path.join(__dirname, "src/node.ts") : "";
+  const target = argv.type === "browser" ? path.join(__dirname, "..", "src/browser.ts") :
+    argv.type === "node" ? path.join(__dirname, "..", "src/node.ts") : "";
 
   fs.writeFileSync(argv.output, `// generated at ${new Date().toISOString()}\n\n` + fs.readFileSync(target) + "\n\n" + printer.printFile(source));
 }
