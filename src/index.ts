@@ -15,6 +15,7 @@ import * as glob from "glob";
 import * as fs from "fs";
 import * as ts from "typescript";
 import yargs from "yargs";
+import * as path from "path";
 
 function gatherReferences(model: Model): string[] {
   if (model.type === BooleanModelTypeSignature) {
@@ -245,8 +246,8 @@ async function main() {
     omitTrailingSemicolon: false,
   });
 
-  const target = argv.type === "browser" ? "./src/browser.ts" :
-    argv.type === "node" ? "./src/node.ts" : "";
+  const target = argv.type === "browser" ? path.join(__dirname, "src/browser.ts") :
+    argv.type === "node" ? path.join(__dirname, "src/node.ts") : "";
 
   fs.writeFileSync(argv.output, `// generated at ${new Date().toISOString()}\n\n` + fs.readFileSync(target) + "\n\n" + printer.printFile(source));
 }
