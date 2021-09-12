@@ -1,6 +1,7 @@
-import {Either, left, right} from "fp-chainer/lib/either";
+import {Either, left, right} from "fp-chainer/either";
 import * as https from "https";
 import {RequestOptions} from "https";
+import {fail, Failure} from "fp-chainer/failure";
 
 const OverrideUrl = (_: string) => _;
 
@@ -19,14 +20,9 @@ export type ResponseBodyOf<Caller> = Either<ExceptionsOf<Caller>, SuccessOf<Call
 
 export const ExceptionUnexpected = "Unexpected" as const;
 
-export interface UnexpectedException {
-  code: typeof ExceptionUnexpected,
-  body: any,
-  httpStatusCode: number,
-  message: "unexpected internal server error",
-}
+export type UnexpectedException = Failure<typeof ExceptionUnexpected, number>;
 
-function call<RequestBody, ResponseBody, ExceptionBody>(url: string, method: string, options: RequestType) {
+function call<RequestBody, ResponseBody, ExceptionBody extends Failure<string, unknown>>(url: string, method: string, options: RequestType) {
   function replaceVariables(template: string, variables: RequestType["variables"]): string {
     const replacer = /\$\{([\w\d_]+)\}/;
     const matched = replacer.exec(template);
@@ -65,21 +61,13 @@ function call<RequestBody, ResponseBody, ExceptionBody>(url: string, method: str
             resolve(right(JSON.parse(data.toString("utf-8"))));
           } else {
             const errorBody = JSON.parse(data.toString("utf-8"));
-            resolve(left({
-              ...errorBody,
-              httpStatusCode: res.statusCode,
-            }));
+            resolve(left(fail(errorBody.code, errorBody.message, res.statusCode)));
           }
         });
       });
 
       req.on("error", error => {
-        resolve(left({
-          code: ExceptionUnexpected,
-          body: error,
-          httpStatusCode: 500,
-          message: "unexpected internal server error",
-        }));
+        resolve(left(fail(ExceptionUnexpected, "unexpected internal server error", 500)));
       })
 
       if (method !== "GET") {
