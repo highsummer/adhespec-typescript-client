@@ -16,6 +16,7 @@ import * as fs from "fs";
 import * as ts from "typescript";
 import yargs from "yargs";
 import * as path from "path";
+import {SyntaxKind} from "typescript";
 
 function gatherReferences(model: Model): string[] {
   if (model.type === BooleanModelTypeSignature) {
@@ -37,7 +38,11 @@ function gatherReferences(model: Model): string[] {
   } else if (model.type === ModelReferenceTypeSignature) {
     return [model.id]
   } else if (model.type === SpecialModelTypeSignature) {
-    throw new Error("not supported")
+    if (model.metadata?.special === "any" || model.metadata?.special === "unknown") {
+      return []
+    } else {
+      throw new Error("not supported")
+    }
   } else {
     const _: never = model;
     return _
@@ -82,7 +87,13 @@ function toTypeNode(model: Model): ts.TypeNode {
       ts.factory.createLiteralTypeNode(ts.factory.createStringLiteral(model.id)),
     )
   } else if (model.type === SpecialModelTypeSignature) {
-    throw new Error("not supported")
+    if (model.metadata?.special === "any") {
+      return ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
+    } else if (model.metadata?.special === "unknown") {
+      return ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)
+    } else {
+      throw new Error("not supported")
+    }
   } else {
     const _: never = model;
     return _
