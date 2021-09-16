@@ -75,10 +75,7 @@ function toTypeNode(model: Model): ts.TypeNode {
   } else if (model.type === DictionaryModelTypeSignature) {
     return ts.factory.createTypeLiteralNode(model.fields.map(([key, value]) => ts.factory.createPropertySignature(undefined, key, value.optional ? ts.factory.createToken(ts.SyntaxKind.QuestionToken) : undefined, toTypeNode(value))))
   } else if (model.type === MapModelTypeSignature) {
-    return ts.factory.createMappedTypeNode(
-      undefined, ts.factory.createTypeParameterDeclaration("p"),
-      toTypeNode(model.keyType), undefined, toTypeNode(model.valueType)
-    )
+    return ts.factory.createTypeReferenceNode("Record", [toTypeNode(model.keyType), toTypeNode(model.valueType)])
   } else if (model.type === UnionModelTypeSignature) {
     return ts.factory.createUnionTypeNode(model.elements.map(toTypeNode))
   } else if (model.type === ModelReferenceTypeSignature) {
