@@ -1,27 +1,19 @@
 import {Either, left, right} from "fp-chainer/either";
 import {fail, Failure} from "fp-chainer/failure";
 
-const OverrideUrl = (_: string) => _;
-
-type RequestType = RequestInit & { variables?: { [p: string]: string | undefined } };
-
-export type RequestBodyOf<Caller> = Caller extends (requestBody: infer RequestBody, runtimeOptions?: RequestType) => Promise<Either<infer ExceptionBody, infer ResponseBody>> ?
-  RequestBody : never;
-
-export type ExceptionsOf<Caller> = Caller extends (requestBody: infer RequestBody, runtimeOptions?: RequestType) => Promise<Either<infer ExceptionBody, infer ResponseBody>> ?
-  ExceptionBody : never;
-
-export type SuccessOf<Caller> = Caller extends (requestBody: infer RequestBody, runtimeOptions?: RequestType) => Promise<Either<infer ExceptionBody, infer ResponseBody>> ?
-  ResponseBody : never;
-
-export type ResponseBodyOf<Caller> = Either<ExceptionsOf<Caller>, SuccessOf<Caller>>;
+interface RequestOptions extends RequestInit {
+  variables?: { [p: string]: string | undefined },
+  overrider?: (old: { url: string, method: string }) => { url: string, method: string },
+}
 
 export const ExceptionUnexpected = "Unexpected" as const;
 
 export type UnexpectedException = Failure<typeof ExceptionUnexpected, number>;
 
-function call<RequestBody, ResponseBody, ExceptionBody extends Failure<string, unknown>>(url: string, method: string, options: RequestType) {
-  function replaceVariables(template: string, variables: RequestType["variables"]): string {
+function call<RequestBody, ResponseBody, ExceptionBody extends Failure<string, unknown>>(urlSpec: string, methodSpec: string, options: RequestOptions) {
+  const { url, method } = options.overrider ? options.overrider({ url: urlSpec, method: methodSpec }) : { url: urlSpec, method: methodSpec };
+
+  function replaceVariables(template: string, variables: RequestOptions["variables"]): string {
     const replacer = /\$\{([\w\d_]+)\}/;
     const matched = replacer.exec(template);
     if (matched !== null) {
@@ -39,7 +31,7 @@ function call<RequestBody, ResponseBody, ExceptionBody extends Failure<string, u
 
   const concreteUrl = replaceVariables(url, options.variables ?? {});
 
-  return async (requestBody: RequestBody, runtimeOptions?: RequestType): Promise<Either<ExceptionBody | UnexpectedException, ResponseBody>> => {
+  return async (requestBody: RequestBody, runtimeOptions?: RequestOptions): Promise<Either<ExceptionBody | UnexpectedException, ResponseBody>> => {
     const query = method === "GET" ? "?" + Object.entries(requestBody).map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join("&") : "";
     const headers = {
       "Content-Type": "application/json",
