@@ -112,11 +112,7 @@ function fromContract(types: { request: ts.TypeNode, success: ts.TypeNode, excep
     ts.factory.createIdentifier("call"),
     [types.request, types.success, types.exceptions],
     [
-      ts.factory.createCallExpression(
-        ts.factory.createIdentifier("OverrideUrl"),
-        undefined,
-        [ts.factory.createStringLiteral(contract.url)],
-      ),
+      ts.factory.createStringLiteral(contract.url),
       ts.factory.createStringLiteral(contract.method),
       ts.factory.createIdentifier("options"),
     ]
@@ -178,7 +174,7 @@ function fromContracts(alias: string, contracts: HttpRestContract[]): ts.Stateme
             ],
             [ts.factory.createParameterDeclaration(
               undefined, undefined, undefined, "options", undefined,
-              ts.factory.createTypeReferenceNode("RequestType"),
+              ts.factory.createTypeReferenceNode("RequestOptions"),
             )],
             undefined,
             ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
