@@ -3,7 +3,7 @@ import * as https from "https";
 import {RequestOptions as HttpsRequestOptions} from "https";
 import {fail, Failure} from "fp-chainer/failure";
 
-interface RequestOptions extends HttpsRequestOptions {
+export interface RequestOptions extends HttpsRequestOptions {
   variables?: { [p: string]: string | undefined },
   overrider?: (old: { url: string, method: string }) => { url: string, method: string },
 }

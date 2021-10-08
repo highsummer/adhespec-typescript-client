@@ -1,7 +1,7 @@
 import {Either, left, right} from "fp-chainer/either";
 import {fail, Failure} from "fp-chainer/failure";
 
-interface RequestOptions extends RequestInit {
+export interface RequestOptions extends RequestInit {
   variables?: { [p: string]: string | undefined },
   overrider?: (old: { url: string, method: string }) => { url: string, method: string },
 }
