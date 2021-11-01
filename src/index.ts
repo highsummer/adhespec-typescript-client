@@ -38,7 +38,7 @@ function gatherReferences(model: Model): string[] {
   } else if (model.type === ModelReferenceTypeSignature) {
     return [model.id]
   } else if (model.type === SpecialModelTypeSignature) {
-    if (model.metadata?.special === "any" || model.metadata?.special === "unknown") {
+    if (model.metadata?.special === "any" || model.metadata?.special === "unknown" || model.metadata?.special === "undefined") {
       return []
     } else {
       throw new Error("not supported")
@@ -88,6 +88,8 @@ function toTypeNode(model: Model): ts.TypeNode {
       return ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword)
     } else if (model.metadata?.special === "unknown") {
       return ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)
+    } else if (model.metadata?.special === "undefined") {
+      return ts.factory.createKeywordTypeNode(ts.SyntaxKind.UndefinedKeyword)
     } else {
       throw new Error("not supported")
     }
