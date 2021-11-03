@@ -48,12 +48,22 @@ function call<RequestBody, ResponseBody, ExceptionBody extends Failure<string, u
         ...runtimeOptions ?? {},
         headers: headers,
       }, res => {
+        let payload: string = "";
+
         res.on("data", (data: Buffer) => {
-          if (res.statusCode === 200) {
-            resolve(right(JSON.parse(data.toString("utf-8"))));
-          } else {
-            const errorBody = JSON.parse(data.toString("utf-8"));
-            resolve(left(fail(errorBody.code, errorBody.message, res.statusCode)));
+          payload += data.toString("utf-8");
+        });
+
+        res.on("end", () => {
+          try {
+            if (res.statusCode === 200) {
+              resolve(right(JSON.parse(payload)));
+            } else {
+              const errorBody = JSON.parse(payload);
+              resolve(left(fail(errorBody.code, errorBody.message, res.statusCode)));
+            }
+          } catch (e) {
+            resolve(left(fail(ExceptionUnexpected, e.message, 500)));
           }
         });
       });
